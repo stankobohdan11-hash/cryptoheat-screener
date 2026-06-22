@@ -2,12 +2,14 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<title>CryptoHeat Screener</title>
+<title>CryptoHeat Bot Screener</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#0d1117; color:#e6edf3; font-family:'Courier New',monospace; padding:20px; }
-h1 { color:#58a6ff; margin-bottom:8px; font-size:20px; }
-.info { color:#8b949e; font-size:13px; margin-bottom:14px; }
+h1 { color:#58a6ff; margin-bottom:4px; font-size:20px; }
+.sub { color:#8b949e; font-size:12px; margin-bottom:14px; }
+.info { color:#8b949e; font-size:13px; margin-bottom:14px; display:flex; gap:18px; flex-wrap:wrap; align-items:center; }
+.info b { color:#e6edf3; }
 .filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
 .filters label { color:#8b949e; font-size:13px; }
 .filters input, .filters select { background:#161b22; color:#e6edf3; border:1px solid #30363d; padding:4px 8px; border-radius:4px; font-size:13px; }
@@ -18,56 +20,137 @@ td { padding:6px 10px; border-bottom:1px solid #21262d; }
 tr:hover td { background:#161b22; }
 .up { color:#3fb950; font-weight:bold; }
 .dn { color:#f85149; font-weight:bold; }
-.bar { display:inline-block; height:8px; border-radius:3px; margin-right:6px; vertical-align:middle; }
-.short { background:#3d1f1f; color:#f85149; padding:2px 7px; border-radius:3px; font-size:11px; }
-.long { background:#1f3d2a; color:#3fb950; padding:2px 7px; border-radius:3px; font-size:11px; }
+.signal { background:#2d2510; color:#f0883e; padding:2px 7px; border-radius:3px; font-size:11px; font-weight:bold; }
+.err { color:#f85149; padding:30px; text-align:center; }
+.tag-s { background:#3d1f1f; color:#f85149; padding:2px 6px; border-radius:3px; font-size:11px; }
+.tag-l { background:#1f3d2a; color:#3fb950; padding:2px 6px; border-radius:3px; font-size:11px; }
 </style>
 </head>
 <body>
-<h1>🔥 CryptoHeat Live Screener</h1>
-<div class="info">Оновлення через <b id="cd">30</b>с | Останнє: <span id="lt">-</span> | Монет: <span id="cnt">-</span></div>
+<h1>🔥 CryptoHeat Bot Screener</h1>
+<div class="sub">Реальні дані з overheat_bot — оновлення кожні ~30сек через GitHub</div>
+<div class="info">
+  <span>Оновлення через <b id="cd">30</b>с</span>
+  <span>Дані бота: <b id="lt">-</b></span>
+  <span>Монет: <b id="cnt">-</b></span>
+  <span>BTC 1г: <b id="btcChg">-</b></span>
+  <span>MIN_SCORE: <b id="minScore">-</b></span>
+</div>
 <div class="filters">
-  <label>Мін. зміна: <input type="number" id="mc" value="5" style="width:55px">%</label>
-  <label>Мін. обєм: <input type="number" id="mv" value="10" style="width:65px">млн</label>
-  <label>Напрямок: <select id="dr"><option value="all">Всі</option><option value="SHORT">SHORT</option><option value="LONG">LONG</option></select></label>
-  <label>Сорт: <select id="sr"><option value="chg">Зміна</option><option value="score">Score</option><option value="vol">Обєм</option></select></label>
+  <label>Мін. score: <input type="number" id="ms" value="0" style="width:50px"></label>
+  <label>Напрямок:
+    <select id="dr">
+      <option value="all">Всі</option>
+      <option value="signal">Тільки сигнали</option>
+      <option value="SHORT">SHORT score</option>
+      <option value="LONG">LONG score</option>
+    </select>
+  </label>
+  <label>Сорт:
+    <select id="sr">
+      <option value="score">Score</option>
+      <option value="chg">Зміна 1г</option>
+      <option value="oh">OH score</option>
+      <option value="od">OD score</option>
+    </select>
+  </label>
   <button onclick="load()">🔄 Оновити</button>
 </div>
 <div id="wrap"><div style="text-align:center;padding:40px;color:#8b949e">Завантаження...</div></div>
+
 <script>
-let t=60,iv;
-function score(chg,vol){let s=0;if(Math.abs(chg)>=5)s+=2;if(Math.abs(chg)>=10)s+=1;if(Math.abs(chg)>=20)s+=1;if(vol>=100)s+=1;if(vol>=500)s+=1;return s;}
-async function load(){
-  try{
-    const url='https://fapi.binance.com/fapi/v1/ticker/24hr';
-    const r=await fetch(url);
-    const data=await r.json();
-    if(!Array.isArray(data)){document.getElementById('wrap').innerHTML='<div style="text-align:center;padding:30px;color:#f85149">Binance API недоступний, спробуйте ще раз</div>';return;}
-    const mc=parseFloat(document.getElementById('mc').value)||5;
-    const mv=(parseFloat(document.getElementById('mv').value)||10)*1e6;
-    const dr=document.getElementById('dr').value;
-    const sr=document.getElementById('sr').value;
-    let rows=data.filter(d=>d.symbol&&d.symbol.endsWith('USDT')&&parseFloat(d.quoteVolume)>=mv)
-      .map(d=>{const chg=parseFloat(d.priceChangePercent);const vol=parseFloat(d.quoteVolume)/1e6;return{sym:d.symbol.replace('USDT',''),chg,vol,price:parseFloat(d.lastPrice),sc:score(chg,vol),dir:chg>0?'SHORT':'LONG'};})
-      .filter(d=>Math.abs(d.chg)>=mc).filter(d=>dr==='all'||d.dir===dr);
-    if(sr==='chg')rows.sort((a,b)=>Math.abs(b.chg)-Math.abs(a.chg));
-    else if(sr==='score')rows.sort((a,b)=>b.sc-a.sc);
-    else rows.sort((a,b)=>b.vol-a.vol);
-    document.getElementById('cnt').textContent=rows.length;
-    document.getElementById('lt').textContent=new Date().toLocaleTimeString('uk-UA');
-    if(!rows.length){document.getElementById('wrap').innerHTML='<div style="text-align:center;padding:30px;color:#8b949e">Немає монет</div>';return;}
-    let h='<table><thead><tr><th>#</th><th>Монета</th><th>Ціна</th><th>Зміна 24г</th><th>Обєм</th><th>Score</th><th>Напрямок</th></tr></thead><tbody>';
-    rows.forEach((r,i)=>{
-      const cl=r.chg>0?'up':'dn';const sg=r.chg>0?'+':'';
-      const bw=Math.min(r.sc*15,90);const bc=r.sc>=5?'#f0883e':r.sc>=3?'#238636':'#444';
-      const fp=r.price<0.001?r.price.toFixed(6):r.price<1?r.price.toFixed(4):r.price.toFixed(2);
-      h+=`<tr><td style="color:#8b949e">${i+1}</td><td><b>${r.sym}</b></td><td style="color:#8b949e">${fp}</td><td class="${cl}">${sg}${r.chg.toFixed(1)}%</td><td style="color:#8b949e">${r.vol.toFixed(0)}млн</td><td><span class="bar" style="width:${bw}px;background:${bc}"></span><b>${r.sc}/6</b></td><td><span class="${r.dir.toLowerCase()}">${r.dir}</span></td></tr>`;
-    });
-    document.getElementById('wrap').innerHTML=h+'</tbody></table>';
-  }catch(e){document.getElementById('wrap').innerHTML='<div style="text-align:center;padding:30px;color:#f85149">Помилка: '+e.message+'</div>';}
+const DIAG_URL = "https://raw.githubusercontent.com/stankobohdan11-hash/cryptoheat-screener/main/diag.json";
+let t=30, iv;
+
+function fmtPrice(p) {
+  if (!p) return '-';
+  return p < 0.001 ? p.toFixed(6) : p < 1 ? p.toFixed(4) : p < 100 ? p.toFixed(3) : p.toFixed(2);
 }
-function tick(){clearInterval(iv);t=60;iv=setInterval(()=>{document.getElementById('cd').textContent=--t;if(t<=0){load();t=60;}},1000);}
-load();tick();
+
+async function load() {
+  try {
+    const r = await fetch(DIAG_URL + "?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) { document.getElementById('wrap').innerHTML = '<div class="err">Помилка завантаження даних з GitHub (' + r.status + ')<br>Можливо push_diag.py ще не запущений на сервері</div>'; return; }
+    const data = await r.json();
+
+    const ts = data._ts || '-';
+    const btcChg = data._btc_chg;
+    const minScore = data._min_score;
+    delete data._ts; delete data._btc_chg; delete data._min_score;
+
+    const ms = parseFloat(document.getElementById('ms').value) || 0;
+    const dr = document.getElementById('dr').value;
+    const sr = document.getElementById('sr').value;
+
+    let rows = Object.entries(data).map(([sym, d]) => ({
+      sym,
+      score: d.final_score || 0,
+      direction: d.final_direction || null,
+      chg: d.price_chg_1h || 0,
+      price: d.price || 0,
+      vol: (d.vol_24h || 0) / 1e6,
+      rsi1h: d.rsi1h, rsi5m: d.rsi5m,
+      cvd: d.cvd, fund: d.fund,
+      oh: d.oh_score || 0, od: d.od_score || 0,
+      sq: d.sq_score || 0, ml: d.ml_score || 0,
+      trend: d.trend,
+      blockLong: d.block_long, blockShort: d.block_short,
+    }));
+
+    rows = rows.filter(d => d.score >= ms);
+    if (dr === 'signal') rows = rows.filter(d => d.direction);
+    else if (dr === 'SHORT') rows = rows.filter(d => d.oh > 0 || d.direction === 'SHORT');
+    else if (dr === 'LONG') rows = rows.filter(d => d.od > 0 || d.sq > 0 || d.ml > 0 || d.direction === 'LONG');
+
+    if (sr === 'score') rows.sort((a,b) => b.score - a.score);
+    else if (sr === 'chg') rows.sort((a,b) => Math.abs(b.chg) - Math.abs(a.chg));
+    else if (sr === 'oh') rows.sort((a,b) => b.oh - a.oh);
+    else if (sr === 'od') rows.sort((a,b) => b.od - a.od);
+
+    document.getElementById('cnt').textContent = rows.length;
+    document.getElementById('lt').textContent = ts;
+    document.getElementById('btcChg').textContent = btcChg !== undefined ? (btcChg>=0?'+':'')+btcChg.toFixed(2)+'%' : '-';
+    document.getElementById('minScore').textContent = minScore !== undefined ? minScore : '-';
+
+    if (!rows.length) { document.getElementById('wrap').innerHTML = '<div style="text-align:center;padding:30px;color:#8b949e">Немає монет за фільтром</div>'; return; }
+
+    let h = '<table><thead><tr><th>#</th><th>Монета</th><th>Ціна</th><th>1г%</th><th>Обєм</th><th>RSI 1г/5м</th><th>CVD%</th><th>Fund%</th><th>OH</th><th>OD</th><th>SQ</th><th>ML</th><th>Тренд</th><th>Статус</th></tr></thead><tbody>';
+    rows.forEach((r,i) => {
+      const cl = r.chg > 0 ? 'up' : 'dn';
+      const sg = r.chg > 0 ? '+' : '';
+      let status = '<span style="color:#444">-</span>';
+      if (r.direction === 'SHORT') status = `<span class="signal">🔴 SHORT ${r.score}</span>`;
+      else if (r.direction === 'LONG') status = `<span class="signal">🟢 LONG ${r.score}</span>`;
+      else if (r.blockShort) status = `<span style="color:#8b949e;font-size:11px">block SHORT</span>`;
+      else if (r.blockLong) status = `<span style="color:#8b949e;font-size:11px">block LONG</span>`;
+      const trendIcon = r.trend === 'bullish' ? '📈' : r.trend === 'bearish' ? '📉' : '➡️';
+      const cvdStr = r.cvd !== undefined ? (r.cvd > 0 ? '+' : '') + r.cvd.toFixed(0) + '%' : '-';
+      const fundStr = r.fund !== undefined ? (r.fund*100).toFixed(3) + '%' : '-';
+      h += `<tr>
+        <td style="color:#8b949e">${i+1}</td>
+        <td><b>${r.sym.replace('USDT','')}</b></td>
+        <td style="color:#8b949e">${fmtPrice(r.price)}</td>
+        <td class="${cl}">${sg}${r.chg.toFixed(2)}%</td>
+        <td style="color:#8b949e">${r.vol >= 1 ? r.vol.toFixed(0)+'м' : (r.vol*1000).toFixed(0)+'к'}</td>
+        <td style="color:#8b949e">${r.rsi1h?.toFixed(0)??'-'}/${r.rsi5m?.toFixed(0)??'-'}</td>
+        <td style="color:${r.cvd < 0 ? '#f85149' : '#3fb950'}">${cvdStr}</td>
+        <td style="color:#8b949e">${fundStr}</td>
+        <td style="color:${r.oh>=6?'#f85149':r.oh>=4?'#f0883e':'#8b949e'}">${r.oh}</td>
+        <td style="color:${r.od>=6?'#3fb950':r.od>=4?'#58a6ff':'#8b949e'}">${r.od}</td>
+        <td style="color:#8b949e">${r.sq}</td>
+        <td style="color:#8b949e">${r.ml}</td>
+        <td>${trendIcon}</td>
+        <td>${status}</td>
+      </tr>`;
+    });
+    document.getElementById('wrap').innerHTML = h + '</tbody></table>';
+  } catch(e) {
+    document.getElementById('wrap').innerHTML = '<div class="err">Помилка: ' + e.message + '</div>';
+  }
+}
+
+function tick() { clearInterval(iv); t=30; iv=setInterval(()=>{ document.getElementById('cd').textContent=--t; if(t<=0){load();t=30;} },1000); }
+load(); tick();
 </script>
 </body>
 </html>
